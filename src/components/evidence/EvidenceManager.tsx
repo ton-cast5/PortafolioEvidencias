@@ -34,6 +34,7 @@ import { FilePreview } from "@/components/evidence/FilePreview";
 interface EvidenceManagerProps {
   topic: Topic;
   evidences: Evidence[];
+  subjectName: string;
   unitTitle: string;
   onRefresh: () => void;
 }
@@ -41,6 +42,7 @@ interface EvidenceManagerProps {
 export function EvidenceManager({
   topic,
   evidences,
+  subjectName,
   unitTitle,
   onRefresh,
 }: EvidenceManagerProps) {
@@ -100,7 +102,7 @@ export function EvidenceManager({
       let fileUrl = editingEvidence?.file_url ?? undefined;
 
       if (form.file) {
-        const storagePath = `compiladores/${unitTitle}/${topic.title}`;
+        const storagePath = `${subjectName}/${unitTitle}/${topic.title}`;
         fileUrl = await uploadFile(form.file, storagePath);
       }
 

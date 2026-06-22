@@ -13,8 +13,9 @@ import {
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { SearchBar } from "@/components/dashboard/SearchBar";
 import { DashboardOverview } from "@/components/dashboard/DashboardOverview";
+import { WelcomeScreen } from "@/components/dashboard/WelcomeScreen";
 import { EvidenceManager } from "@/components/evidence/EvidenceManager";
-import { UnitFormModal, TopicFormModal } from "@/components/forms/CrudModals";
+import { UnitFormModal, TopicFormModal, SubjectFormModal } from "@/components/forms/CrudModals";
 import { Button } from "@/components/ui/Button";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import {
@@ -22,21 +23,23 @@ import {
   getDashboardStats,
   deleteUnit,
   deleteTopic,
+  deleteSubject,
   signOut,
-  seedCompiladoresPortfolio,
   getSubjects,
 } from "@/lib/services/portfolio";
 import { exportPortfolioToPDF } from "@/lib/utils/export-pdf";
-import type { SubjectWithUnits, Unit, Topic, DashboardStats, SearchResult } from "@/lib/types";
+import type { Subject, SubjectWithUnits, Unit, Topic, DashboardStats, SearchResult } from "@/lib/types";
+
+const STORAGE_KEY = "selectedSubjectId";
 
 export function DashboardClient() {
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
 
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [subject, setSubject] = useState<SubjectWithUnits | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [seeding, setSeeding] = useState(false);
 
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
@@ -47,43 +50,83 @@ export function DashboardClient() {
     open: false,
     unitId: "",
   });
+  const [subjectModal, setSubjectModal] = useState<{ open: boolean; editing?: Subject | null }>({ open: false });
 
-  const loadData = useCallback(async () => {
+  const loadSubject = useCallback(async (subjectId: string) => {
+    const subjectData = await getSubjectWithUnits(subjectId);
+    const statsData = await getDashboardStats(subjectId);
+    setSubject(subjectData);
+    setStats(statsData);
+    localStorage.setItem(STORAGE_KEY, subjectId);
+  }, []);
+
+  const loadData = useCallback(async (preferredSubjectId?: string) => {
     try {
-      const subjects = await getSubjects();
-      if (subjects.length === 0) {
+      const subjectsList = await getSubjects();
+      setSubjects(subjectsList);
+
+      if (subjectsList.length === 0) {
         setSubject(null);
         setStats(null);
-        setLoading(false);
+        localStorage.removeItem(STORAGE_KEY);
         return;
       }
 
-      const subjectData = await getSubjectWithUnits(subjects[0].id);
-      const statsData = await getDashboardStats(subjects[0].id);
+      const storedId = preferredSubjectId ?? localStorage.getItem(STORAGE_KEY);
+      const activeId =
+        storedId && subjectsList.some((s) => s.id === storedId)
+          ? storedId
+          : subjectsList[0].id;
 
-      setSubject(subjectData);
-      setStats(statsData);
+      await loadSubject(activeId);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadSubject]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const handleSeed = async () => {
-    setSeeding(true);
+  const handleSelectSubject = async (subjectId: string) => {
+    setSelectedTopicId(null);
+    setSelectedUnitId(null);
+    setView("dashboard");
+    setLoading(true);
     try {
-      await seedCompiladoresPortfolio();
-      await loadData();
-    } catch (err) {
-      console.error(err);
-      alert("Error al inicializar el portafolio. Asegúrate de haber ejecutado las migraciones SQL en Supabase.");
+      await loadSubject(subjectId);
     } finally {
-      setSeeding(false);
+      setLoading(false);
+    }
+  };
+
+  const handleSubjectCreated = async (subjectId?: string) => {
+    setLoading(true);
+    try {
+      await loadData(subjectId);
+      if (subjectId) {
+        setView("dashboard");
+        setSelectedTopicId(null);
+        setSelectedUnitId(null);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteSubject = async (subjectToDelete: Subject) => {
+    if (!confirm(`¿Eliminar "${subjectToDelete.name}" y todo su contenido?`)) return;
+    await deleteSubject(subjectToDelete.id);
+    setView("dashboard");
+    setSelectedTopicId(null);
+    setSelectedUnitId(null);
+    setLoading(true);
+    try {
+      await loadData();
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -123,7 +166,7 @@ export function DashboardClient() {
 
   const selectedUnit = subject?.units.find((u) => u.id === selectedUnitId);
 
-  if (loading) {
+  if (loading && !subject) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
@@ -131,33 +174,22 @@ export function DashboardClient() {
     );
   }
 
+  if (subjects.length === 0) {
+    return (
+      <WelcomeScreen
+        onSuccess={(subjectId) => {
+          setLoading(true);
+          loadData(subjectId).finally(() => setLoading(false));
+        }}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
+
   if (!subject) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-6 bg-gray-50 dark:bg-gray-950">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Bienvenido al Portafolio
-          </h1>
-          <p className="mt-2 text-gray-500">
-            Inicializa tu portafolio de Compiladores con las 6 unidades del temario
-          </p>
-        </div>
-        <Button onClick={handleSeed} disabled={seeding} size="lg">
-          {seeding ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Inicializando...
-            </>
-          ) : (
-            "Inicializar portafolio de Compiladores"
-          )}
-        </Button>
-        <button
-          onClick={handleSignOut}
-          className="text-sm text-gray-400 hover:text-gray-600"
-        >
-          Cerrar sesión
-        </button>
+      <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
@@ -165,9 +197,13 @@ export function DashboardClient() {
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950">
       <Sidebar
+        subjects={subjects}
         subject={subject}
         selectedTopicId={selectedTopicId}
         selectedUnitId={selectedUnitId}
+        onSelectSubject={handleSelectSubject}
+        onCreateSubject={() => setSubjectModal({ open: true })}
+        onEditSubject={(s) => setSubjectModal({ open: true, editing: s })}
         onSelectTopic={(topicId, unitId) => {
           setSelectedTopicId(topicId);
           setSelectedUnitId(unitId);
@@ -184,7 +220,7 @@ export function DashboardClient() {
         onDeleteUnit={async (unit) => {
           if (confirm(`¿Eliminar "${unit.title}" y todos sus temas?`)) {
             await deleteUnit(unit.id);
-            loadData();
+            loadData(subject.id);
             if (selectedUnitId === unit.id) setView("dashboard");
           }
         }}
@@ -194,7 +230,7 @@ export function DashboardClient() {
         onDeleteTopic={async (topic) => {
           if (confirm(`¿Eliminar "${topic.title}"?`)) {
             await deleteTopic(topic.id);
-            loadData();
+            loadData(subject.id);
             if (selectedTopicId === topic.id) setView("dashboard");
           }
         }}
@@ -226,6 +262,16 @@ export function DashboardClient() {
               <Download className="h-4 w-4" />
               Exportar PDF
             </Button>
+            {subjects.length >= 1 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteSubject(subject)}
+                className="text-red-500 hover:text-red-600"
+              >
+                Eliminar materia
+              </Button>
+            )}
             <button
               onClick={toggleTheme}
               className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -282,8 +328,9 @@ export function DashboardClient() {
             <EvidenceManager
               topic={selectedTopic}
               evidences={selectedTopic.evidences ?? []}
+              subjectName={subject.name}
               unitTitle={selectedTopic.unitTitle}
-              onRefresh={loadData}
+              onRefresh={() => loadData(subject.id)}
             />
           )}
         </main>
@@ -295,7 +342,7 @@ export function DashboardClient() {
         subjectId={subject.id}
         unitCount={subject.units.length}
         editingUnit={unitModal.editing}
-        onSuccess={loadData}
+        onSuccess={() => loadData(subject.id)}
       />
 
       <TopicFormModal
@@ -303,7 +350,14 @@ export function DashboardClient() {
         onClose={() => setTopicModal({ open: false, unitId: "" })}
         unitId={topicModal.unitId}
         editingTopic={topicModal.editing}
-        onSuccess={loadData}
+        onSuccess={() => loadData(subject.id)}
+      />
+
+      <SubjectFormModal
+        isOpen={subjectModal.open}
+        onClose={() => setSubjectModal({ open: false })}
+        editingSubject={subjectModal.editing}
+        onSuccess={handleSubjectCreated}
       />
     </div>
   );

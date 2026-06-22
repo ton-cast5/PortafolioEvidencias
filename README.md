@@ -1,27 +1,17 @@
-# Portafolio Académico — Compiladores
+# Portafolio Académico
 
-Aplicación web para organizar, visualizar y almacenar evidencias académicas de la materia de **Compiladores**.
+Aplicación web para organizar, visualizar y almacenar evidencias académicas de cualquier materia.
 
-Permite estructurar el contenido por unidades y temas según el temario de la materia, y gestionar distintos tipos de evidencias en un solo lugar.
+Cada usuario gestiona sus propias materias de forma independiente, con unidades, temas y evidencias organizadas según su temario.
 
 ## ¿Qué puedes hacer?
 
+- Crear y alternar entre varias materias
 - Organizar apuntes, tareas y proyectos por unidad y tema
-- Consultar el avance de cada unidad del temario
+- Consultar el avance de cada unidad
 - Buscar contenido por unidad, tema o evidencia
 - Etiquetar evidencias y registrar fechas de entrega
 - Exportar el portafolio completo
-
-## Temario incluido
-
-1. Generalidades
-2. Análisis Léxico
-3. Gramáticas
-4. Análisis Sintáctico
-5. Fase de Síntesis
-6. Tabla de símbolos y memoria
-
-Cada unidad puede ampliarse con nuevos temas y evidencias según avance el curso.
 
 ## Tipos de evidencia
 
@@ -31,4 +21,4 @@ Cada unidad puede ampliarse con nuevos temas y evidencias según avance el curso
 
 ## Objetivo
 
-Funcionar como un portafolio académico claro y ordenado, donde puedas concentrar toda la materia de Compiladores y consultar tu progreso de forma sencilla.
+Funcionar como un portafolio académico claro y ordenado, donde puedas concentrar el contenido de cada materia y consultar tu progreso de forma sencilla.

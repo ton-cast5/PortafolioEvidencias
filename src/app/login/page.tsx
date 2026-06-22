@@ -40,8 +40,8 @@ export default function LoginPage() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 shadow-lg shadow-blue-600/30">
             <BookOpen className="h-7 w-7 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Portafolio Compiladores</h1>
-          <p className="mt-2 text-gray-400">Gestiona tus evidencias académicas</p>
+          <h1 className="text-2xl font-bold text-white">Portafolio Académico</h1>
+          <p className="mt-2 text-gray-400">Organiza tus evidencias por materia</p>
         </div>
 
         <form

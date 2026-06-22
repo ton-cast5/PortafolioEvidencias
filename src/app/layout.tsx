@@ -6,8 +6,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Portafolio Compiladores",
-  description: "Plataforma de gestión de evidencias académicas para la materia de Compiladores",
+  title: "Portafolio Académico",
+  description: "Plataforma para organizar evidencias académicas por materia, unidad y tema",
 };
 
 export default function RootLayout({

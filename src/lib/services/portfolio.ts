@@ -71,6 +71,40 @@ export async function getSubjectWithUnits(subjectId: string): Promise<SubjectWit
   return { ...subject, units: unitsWithTopics };
 }
 
+export async function createSubject(name: string, description: string): Promise<Subject> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("No autenticado");
+
+  const { data, error } = await supabase()
+    .from("subjects")
+    .insert({ name, description, user_id: user.id })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateSubject(
+  id: string,
+  updates: Partial<Pick<Subject, "name" | "description">>
+): Promise<Subject> {
+  const { data, error } = await supabase()
+    .from("subjects")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteSubject(id: string): Promise<void> {
+  const { error } = await supabase().from("subjects").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function seedCompiladoresPortfolio(): Promise<string | null> {
   const user = await getCurrentUser();
   if (!user) return null;

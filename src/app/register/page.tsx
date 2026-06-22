@@ -52,7 +52,7 @@ export default function RegisterPage() {
             <BookOpen className="h-7 w-7 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-white">Crear cuenta</h1>
-          <p className="mt-2 text-gray-400">Regístrate para gestionar tu portafolio</p>
+          <p className="mt-2 text-gray-400">Regístrate y crea tu portafolio académico</p>
         </div>
 
         <form
