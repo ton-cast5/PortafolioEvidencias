@@ -25,9 +25,10 @@ const TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
 
 async function main() {
   if (!TOKEN) {
-    console.error("❌ Falta SUPABASE_ACCESS_TOKEN.");
-    console.error("   Token: https://supabase.com/dashboard/account/tokens");
-    console.error("   Ejecuta: $env:SUPABASE_ACCESS_TOKEN='tu_token'; npm run email:templates:deploy");
+    console.error("❌ Falta SUPABASE_ACCESS_TOKEN en .env.local o en el entorno.");
+    console.error("   Genera uno en: https://supabase.com/dashboard/account/tokens");
+    console.error("   Añade a .env.local: SUPABASE_ACCESS_TOKEN=tu_token");
+    console.error("   Luego ejecuta: npm run email:templates:deploy");
     process.exit(1);
   }
 
