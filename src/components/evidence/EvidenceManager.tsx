@@ -160,6 +160,11 @@ export function EvidenceManager({
     }
   };
 
+  const openPreview = (evidence: Evidence) => {
+    setPreviewEvidence(evidence);
+    setShowPreview(true);
+  };
+
   const toggleTag = (tag: string) => {
     setForm((prev) => ({
       ...prev,
@@ -202,43 +207,52 @@ export function EvidenceManager({
           {evidences.map((evidence) => (
             <div
               key={evidence.id}
-              className="group rounded-xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-lg dark:border-gray-800 dark:bg-gray-900"
+              className="group flex flex-col rounded-xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-lg dark:border-gray-800 dark:bg-gray-900"
             >
               <div className="mb-3 flex items-start justify-between">
                 <Badge className={EVIDENCE_TYPE_COLORS[evidence.type]}>
                   {EVIDENCE_TYPE_LABELS[evidence.type]}
                 </Badge>
-                <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  {(evidence.file_url || evidence.content) && (
-                    <button
-                      onClick={() => {
-                        setPreviewEvidence(evidence);
-                        setShowPreview(true);
-                      }}
-                      className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-800"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                  )}
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => openPreview(evidence)}
+                    className="rounded p-1.5 text-gray-500 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950"
+                    title="Ver evidencia"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </button>
                   <button
                     onClick={() => openEdit(evidence)}
                     className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-800"
+                    title="Editar"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(evidence)}
                     className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                    title="Eliminar"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>
 
-              <h3 className="font-semibold text-gray-900 dark:text-white">{evidence.title}</h3>
-              {evidence.description && (
-                <p className="mt-1 text-sm text-gray-500 line-clamp-2">{evidence.description}</p>
-              )}
+              <button
+                type="button"
+                onClick={() => openPreview(evidence)}
+                className="flex-1 text-left"
+              >
+                <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">
+                  {evidence.title}
+                </h3>
+                {evidence.description && (
+                  <p className="mt-1 text-sm text-gray-500 line-clamp-2">{evidence.description}</p>
+                )}
+                {evidence.content && !isEmptyHtml(evidence.content) && (
+                  <p className="mt-2 text-xs text-gray-400">Incluye texto enriquecido</p>
+                )}
+              </button>
 
               {evidence.tags && evidence.tags.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1">
@@ -253,24 +267,42 @@ export function EvidenceManager({
                 </div>
               )}
 
-              <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
-                {evidence.due_date && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {formatDate(evidence.due_date)}
-                  </span>
-                )}
-                {evidence.file_url && (
-                  <a
-                    href={evidence.file_url}
-                    download
-                    className="flex items-center gap-1 text-blue-500 hover:underline"
-                    onClick={(e) => e.stopPropagation()}
+              <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 text-xs dark:border-gray-800">
+                <div className="flex items-center gap-3 text-gray-400">
+                  {evidence.due_date && (
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {formatDate(evidence.due_date)}
+                    </span>
+                  )}
+                  {evidence.file_url && (
+                    <span className="flex items-center gap-1">
+                      <FileIcon className="h-3 w-3" />
+                      Archivo adjunto
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => openPreview(evidence)}
+                    className="flex items-center gap-1 font-medium text-blue-600 hover:underline dark:text-blue-400"
                   >
-                    <Download className="h-3 w-3" />
-                    Descargar
-                  </a>
-                )}
+                    <Eye className="h-3 w-3" />
+                    Ver
+                  </button>
+                  {evidence.file_url && (
+                    <a
+                      href={evidence.file_url}
+                      download
+                      className="flex items-center gap-1 text-blue-500 hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Download className="h-3 w-3" />
+                      Descargar
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
           ))}
