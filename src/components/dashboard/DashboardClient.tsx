@@ -147,7 +147,9 @@ export function DashboardClient() {
       await exportPortfolioToPDF(subject);
     } catch (err) {
       console.error(err);
-      alert("Error al generar el PDF. Intenta de nuevo.");
+      const message =
+        err instanceof Error ? err.message : "Error al generar el PDF. Intenta de nuevo.";
+      alert(message);
     } finally {
       setExportingPdf(false);
     }

@@ -15,6 +15,7 @@ const LINE_HEIGHT = 1.5;
 const MARGIN = 56.69; // ~20mm en pt
 const FOOTER = 36;
 const FONT = "helvetica";
+const MAX_CANVAS_HEIGHT = 12000;
 
 const RICH_HTML_STYLES = `
   font-family: Arial, Helvetica, sans-serif;
@@ -25,20 +26,6 @@ const RICH_HTML_STYLES = `
   background: #fff;
   word-spacing: normal;
   letter-spacing: normal;
-`;
-const RICH_HTML_CHILD_STYLES = `
-  p { margin: 0 0 10pt; }
-  p:last-child { margin-bottom: 0; }
-  h1, h2, h3 { font-weight: bold; margin: 14pt 0 8pt; line-height: 1.3; }
-  h1 { font-size: 16pt; }
-  h2 { font-size: 14pt; }
-  h3 { font-size: 12pt; }
-  ul, ol { margin: 0 0 10pt; padding-left: 24pt; }
-  li { margin-bottom: 4pt; }
-  li p { margin: 0; }
-  strong, b { font-weight: bold; }
-  em, i { font-style: italic; }
-  u { text-decoration: underline; }
 `;
 
 type PdfContext = {
@@ -139,10 +126,40 @@ function hasRichFormatting(html: string): boolean {
   return /<(h[1-6]|ul|ol|li|strong|b|em|i|u|blockquote)[\s>]/i.test(html);
 }
 
+function injectRichHtmlStyles(): () => void {
+  const id = "pdf-export-rich-styles";
+  if (document.getElementById(id)) {
+    return () => undefined;
+  }
+
+  const style = document.createElement("style");
+  style.id = id;
+  style.textContent = `
+    #pdf-export-root p { margin: 0 0 10pt; }
+    #pdf-export-root p:last-child { margin-bottom: 0; }
+    #pdf-export-root h1, #pdf-export-root h2, #pdf-export-root h3 {
+      font-weight: bold; margin: 14pt 0 8pt; line-height: 1.3;
+    }
+    #pdf-export-root h1 { font-size: 16pt; }
+    #pdf-export-root h2 { font-size: 14pt; }
+    #pdf-export-root h3 { font-size: 12pt; }
+    #pdf-export-root ul, #pdf-export-root ol { margin: 0 0 10pt; padding-left: 24pt; }
+    #pdf-export-root li { margin-bottom: 4pt; }
+    #pdf-export-root li p { margin: 0; }
+    #pdf-export-root strong, #pdf-export-root b { font-weight: bold; }
+    #pdf-export-root em, #pdf-export-root i { font-style: italic; }
+    #pdf-export-root u { text-decoration: underline; }
+  `;
+  document.head.appendChild(style);
+  return () => style.remove();
+}
+
 async function renderHtmlToCanvas(html: string, widthPx = 680): Promise<HTMLCanvasElement | null> {
   if (!html.trim() || typeof document === "undefined") return null;
 
+  const cleanupStyles = injectRichHtmlStyles();
   const container = document.createElement("div");
+  container.id = "pdf-export-root";
   container.style.cssText = `
     position: fixed; left: -9999px; top: 0;
     width: ${widthPx}px; padding: 0;
@@ -150,76 +167,83 @@ async function renderHtmlToCanvas(html: string, widthPx = 680): Promise<HTMLCanv
     ${RICH_HTML_STYLES}
   `;
   container.innerHTML = html;
-
-  const style = document.createElement("style");
-  style.textContent = RICH_HTML_CHILD_STYLES;
-  container.prepend(style);
-
   document.body.appendChild(container);
 
   try {
     return await html2canvas(container, {
-      scale: 2,
+      scale: 1.5,
       useCORS: true,
       logging: false,
       backgroundColor: "#ffffff",
     });
+  } catch (err) {
+    console.warn("html2canvas fallo, usando texto plano:", err);
+    return null;
   } finally {
     document.body.removeChild(container);
+    cleanupStyles();
   }
 }
 
 async function addCanvasToPdf(ctx: PdfContext, canvas: HTMLCanvasElement) {
-  const imgWidthMm = ctx.contentWidth;
-  const imgHeightMm = (canvas.height * imgWidthMm) / canvas.width;
+  if (!canvas.width || !canvas.height) return;
 
-  let offsetMm = 0;
+  const imgWidthPt = ctx.contentWidth;
+  const imgHeightPt = (canvas.height * imgWidthPt) / canvas.width;
+  if (!Number.isFinite(imgHeightPt) || imgHeightPt <= 0) return;
 
-  while (offsetMm < imgHeightMm - 0.5) {
+  let offsetPt = 0;
+  let guard = 0;
+  const maxSlices = Math.ceil(imgHeightPt / 10) + 50;
+
+  while (offsetPt < imgHeightPt - 0.5 && guard < maxSlices) {
+    guard += 1;
     const available = ctx.pageHeight - FOOTER - ctx.y;
     if (available < 12) {
       newPage(ctx);
       continue;
     }
 
-    const sliceHeightMm = Math.min(imgHeightMm - offsetMm, available);
-    const srcYPx = (offsetMm / imgHeightMm) * canvas.height;
-    const sliceHeightPx = (sliceHeightMm / imgHeightMm) * canvas.height;
+    const sliceHeightPt = Math.min(imgHeightPt - offsetPt, available);
+    if (sliceHeightPt <= 0) break;
+
+    const srcYPx = (offsetPt / imgHeightPt) * canvas.height;
+    const sliceHeightPx = (sliceHeightPt / imgHeightPt) * canvas.height;
 
     const sliceCanvas = document.createElement("canvas");
     sliceCanvas.width = canvas.width;
     sliceCanvas.height = Math.max(1, Math.ceil(sliceHeightPx));
 
     const sctx = sliceCanvas.getContext("2d");
-    if (sctx) {
-      sctx.fillStyle = "#ffffff";
-      sctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
-      sctx.drawImage(
-        canvas,
-        0,
-        srcYPx,
-        canvas.width,
-        sliceHeightPx,
-        0,
-        0,
-        canvas.width,
-        sliceCanvas.height
-      );
+    if (!sctx) break;
 
-      ctx.doc.addImage(
-        sliceCanvas.toDataURL("image/png"),
-        "PNG",
-        MARGIN,
-        ctx.y,
-        imgWidthMm,
-        sliceHeightMm
-      );
+    sctx.fillStyle = "#ffffff";
+    sctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+    sctx.drawImage(
+      canvas,
+      0,
+      srcYPx,
+      canvas.width,
+      sliceHeightPx,
+      0,
+      0,
+      canvas.width,
+      sliceCanvas.height
+    );
+
+    let dataUrl: string;
+    try {
+      dataUrl = sliceCanvas.toDataURL("image/jpeg", 0.92);
+    } catch {
+      dataUrl = sliceCanvas.toDataURL("image/png");
     }
 
-    ctx.y += sliceHeightMm + 2;
-    offsetMm += sliceHeightMm;
+    ctx.doc.addImage(dataUrl, "JPEG", MARGIN, ctx.y, imgWidthPt, sliceHeightPt);
 
-    if (offsetMm < imgHeightMm - 0.5) {
+    ctx.y += sliceHeightPt + 2;
+    offsetPt += sliceHeightPt;
+
+    if (offsetPt < imgHeightPt - 0.5) {
       newPage(ctx);
     }
   }
@@ -229,12 +253,17 @@ async function addCanvasToPdf(ctx: PdfContext, canvas: HTMLCanvasElement) {
 
 /** Renderiza HTML con el formato original (negritas, listas, etc.) */
 async function addRichHtmlBlock(ctx: PdfContext, html: string) {
-  const canvas = await renderHtmlToCanvas(html);
-  if (!canvas) {
+  try {
+    const canvas = await renderHtmlToCanvas(html);
+    if (!canvas || canvas.height > MAX_CANVAS_HEIGHT) {
+      addParagraphs(ctx, htmlToPlainText(html));
+      return;
+    }
+    await addCanvasToPdf(ctx, canvas);
+  } catch (err) {
+    console.warn("Error renderizando HTML enriquecido:", err);
     addParagraphs(ctx, htmlToPlainText(html));
-    return;
   }
-  await addCanvasToPdf(ctx, canvas);
 }
 
 /** Texto estructurado para descripciones y evidencias */
@@ -300,7 +329,7 @@ async function addImageFromUrl(ctx: PdfContext, url: string, caption?: string) {
     ctx.y += h + 10;
     setBodyStyle(ctx.doc);
   } catch {
-    addJustifiedText(ctx, `[Imagen no disponible: ${url}]`);
+    addJustifiedText(ctx, `[Imagen no disponible]`);
   }
 }
 
@@ -368,7 +397,7 @@ function addCoverPage(ctx: PdfContext, subject: SubjectWithUnits) {
 
   const fields: [string, string | null | undefined][] = [
     ["Licenciatura", subject.degree],
-    ["Código de asignatura", subject.course_code],
+    ["Codigo de asignatura", subject.course_code],
     ["Asignatura", subject.course_name ?? subject.name],
     ["Grupo", subject.group_name],
     ["Docente", subject.teacher_name],
@@ -432,11 +461,11 @@ async function appendPdfFromUrl(doc: PDFDocument, url: string) {
     const res = await fetch(url);
     if (!res.ok) return;
     const bytes = await res.arrayBuffer();
-    const attachDoc = await PDFDocument.load(bytes);
+    const attachDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
     const pages = await doc.copyPages(attachDoc, attachDoc.getPageIndices());
     pages.forEach((p) => doc.addPage(p));
-  } catch {
-    // skip
+  } catch (err) {
+    console.warn("No se pudo adjuntar PDF:", url, err);
   }
 }
 
@@ -446,13 +475,13 @@ async function mergePortfolioPdf(
   programaUrl: string | null,
   evidenceUrls: string[]
 ): Promise<Uint8Array> {
-  const doc = await PDFDocument.load(frontBytes);
+  const doc = await PDFDocument.load(frontBytes, { ignoreEncryption: true });
 
   if (programaUrl) {
     await appendPdfFromUrl(doc, programaUrl);
   }
 
-  const bodyDoc = await PDFDocument.load(bodyBytes);
+  const bodyDoc = await PDFDocument.load(bodyBytes, { ignoreEncryption: true });
   const bodyPages = await doc.copyPages(bodyDoc, bodyDoc.getPageIndices());
   bodyPages.forEach((p) => doc.addPage(p));
 
@@ -464,14 +493,15 @@ async function mergePortfolioPdf(
 }
 
 async function addPageNumbersToPdf(pdfBytes: Uint8Array): Promise<Uint8Array> {
-  const doc = await PDFDocument.load(pdfBytes);
+  const doc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const pages = doc.getPages();
   const total = pages.length;
 
   pages.forEach((page, index) => {
     const { width } = page.getSize();
-    const text = `Página ${index + 1} de ${total}`;
+    // Sin acentos: Helvetica WinAnsi no soporta caracteres como "á"
+    const text = `Pagina ${index + 1} de ${total}`;
     const textWidth = font.widthOfTextAtSize(text, 9);
     page.drawText(text, {
       x: (width - textWidth) / 2,
@@ -519,7 +549,7 @@ async function buildUnitsSection(ctx: PdfContext, subject: SubjectWithUnits) {
 }
 
 function createPdfContext(): PdfContext {
-  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const doc = new jsPDF({ unit: "pt", format: "a4", compress: true });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
@@ -533,7 +563,23 @@ function createPdfContext(): PdfContext {
   };
 }
 
-export async function exportPortfolioToPDF(subject: SubjectWithUnits): Promise<void> {
+function downloadPdfBlob(blob: Blob, fileName: string) {
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function buildAndDownloadPdf(
+  subject: SubjectWithUnits,
+  fileName: string,
+  includePrograma: boolean,
+  includeEvidencePdfs: boolean
+) {
   const frontCtx = createPdfContext();
 
   addCoverPage(frontCtx, subject);
@@ -544,7 +590,7 @@ export async function exportPortfolioToPDF(subject: SubjectWithUnits): Promise<v
     await addRichHtmlBlock(frontCtx, subject.encuadre);
   }
 
-  if (subject.programa_file_url) {
+  if (includePrograma && subject.programa_file_url) {
     newPage(frontCtx);
     addHeading(frontCtx, "PROGRAMA DE LA MATERIA", 1);
   }
@@ -552,20 +598,49 @@ export async function exportPortfolioToPDF(subject: SubjectWithUnits): Promise<v
   const bodyCtx = createPdfContext();
   await buildUnitsSection(bodyCtx, subject);
 
+  const programaUrl = includePrograma ? subject.programa_file_url : null;
+  const evidenceUrls = includeEvidencePdfs ? bodyCtx.pdfAttachments : [];
+
+  let pdfBytes: Uint8Array;
+
+  try {
+    const merged = await mergePortfolioPdf(
+      frontCtx.doc.output("arraybuffer"),
+      bodyCtx.doc.output("arraybuffer"),
+      programaUrl,
+      evidenceUrls
+    );
+    pdfBytes = await addPageNumbersToPdf(merged);
+  } catch (mergeErr) {
+    console.warn("Merge PDF fallo, usando exportacion simple:", mergeErr);
+    const merged = await mergePortfolioPdf(
+      frontCtx.doc.output("arraybuffer"),
+      bodyCtx.doc.output("arraybuffer"),
+      null,
+      []
+    );
+    try {
+      pdfBytes = await addPageNumbersToPdf(merged);
+    } catch {
+      pdfBytes = new Uint8Array(merged);
+    }
+  }
+
+  downloadPdfBlob(
+    new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" }),
+    fileName
+  );
+}
+
+export async function exportPortfolioToPDF(subject: SubjectWithUnits): Promise<void> {
   const fileName = `${(subject.course_name ?? subject.name).replace(/\s+/g, "_")}_portafolio.pdf`;
 
-  const merged = await mergePortfolioPdf(
-    frontCtx.doc.output("arraybuffer"),
-    bodyCtx.doc.output("arraybuffer"),
-    subject.programa_file_url,
-    bodyCtx.pdfAttachments
-  );
-
-  const numbered = await addPageNumbersToPdf(merged);
-  const blob = new Blob([new Uint8Array(numbered)], { type: "application/pdf" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = fileName;
-  link.click();
-  URL.revokeObjectURL(link.href);
+  try {
+    await buildAndDownloadPdf(subject, fileName, true, true);
+  } catch (err) {
+    console.error("Error exportando PDF:", err);
+    throw new Error(
+      err instanceof Error ? err.message : "No se pudo generar el PDF del portafolio"
+    );
+  }
 }
