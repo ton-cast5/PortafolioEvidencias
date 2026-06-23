@@ -1,4 +1,9 @@
 export type EvidenceType = "apunte" | "tarea" | "proyecto";
+export type TopicType = "tema" | "clase";
+
+export const DEFAULT_UNIVERSITY = "Universidad Juárez Autónoma de Tabasco";
+export const DEFAULT_DIVISION =
+  "División Académica de Ciencias y Tecnologías de la Información";
 
 export interface Subject {
   id: string;
@@ -6,6 +11,31 @@ export interface Subject {
   description: string | null;
   user_id: string;
   created_at: string;
+  university: string | null;
+  division: string | null;
+  project_name: string | null;
+  degree: string | null;
+  course_code: string | null;
+  course_name: string | null;
+  group_name: string | null;
+  teacher_name: string | null;
+  student_name: string | null;
+  encuadre: string | null;
+  programa: string | null;
+}
+
+export interface SubjectPortfolioData {
+  university?: string;
+  division?: string;
+  project_name?: string;
+  degree?: string;
+  course_code?: string;
+  course_name?: string;
+  group_name?: string;
+  teacher_name?: string;
+  student_name?: string;
+  encuadre?: string;
+  programa?: string;
 }
 
 export interface Unit {
@@ -22,6 +52,7 @@ export interface Topic {
   id: string;
   title: string;
   description: string | null;
+  topic_type: TopicType;
   unit_id: string;
   user_id: string;
   created_at: string;
@@ -88,6 +119,11 @@ export const EVIDENCE_TYPE_COLORS: Record<EvidenceType, string> = {
   apunte: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   tarea: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   proyecto: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+};
+
+export const TOPIC_TYPE_LABELS: Record<TopicType, string> = {
+  tema: "Tema",
+  clase: "Clase",
 };
 
 export const COMMON_TAGS = [

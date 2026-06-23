@@ -8,7 +8,10 @@ import type {
   DashboardStats,
   SearchResult,
   EvidenceType,
+  TopicType,
+  SubjectPortfolioData,
 } from "@/lib/types";
+import { DEFAULT_UNIVERSITY, DEFAULT_DIVISION } from "@/lib/types";
 
 const supabase = () => createClient();
 
@@ -77,7 +80,14 @@ export async function createSubject(name: string, description: string): Promise<
 
   const { data, error } = await supabase()
     .from("subjects")
-    .insert({ name, description, user_id: user.id })
+    .insert({
+      name,
+      description,
+      user_id: user.id,
+      university: DEFAULT_UNIVERSITY,
+      division: DEFAULT_DIVISION,
+      course_name: name,
+    })
     .select()
     .single();
 
@@ -87,7 +97,9 @@ export async function createSubject(name: string, description: string): Promise<
 
 export async function updateSubject(
   id: string,
-  updates: Partial<Pick<Subject, "name" | "description">>
+  updates: Partial<
+    Pick<Subject, "name" | "description"> & SubjectPortfolioData
+  >
 ): Promise<Subject> {
   const { data, error } = await supabase()
     .from("subjects")
@@ -98,6 +110,13 @@ export async function updateSubject(
 
   if (error) throw error;
   return data;
+}
+
+export async function updateSubjectPortfolio(
+  id: string,
+  data: SubjectPortfolioData & { name?: string; description?: string }
+): Promise<Subject> {
+  return updateSubject(id, data);
 }
 
 export async function deleteSubject(id: string): Promise<void> {
@@ -165,7 +184,8 @@ export async function deleteUnit(id: string): Promise<void> {
 export async function createTopic(
   unitId: string,
   title: string,
-  description: string
+  description: string,
+  topicType: TopicType = "tema"
 ): Promise<Topic> {
   const user = await getCurrentUser();
   if (!user) throw new Error("No autenticado");
@@ -175,6 +195,7 @@ export async function createTopic(
     .insert({
       title,
       description,
+      topic_type: topicType,
       unit_id: unitId,
       user_id: user.id,
     })
@@ -187,7 +208,7 @@ export async function createTopic(
 
 export async function updateTopic(
   id: string,
-  updates: Partial<Pick<Topic, "title" | "description">>
+  updates: Partial<Pick<Topic, "title" | "description" | "topic_type">>
 ): Promise<Topic> {
   const { data, error } = await supabase()
     .from("topics")

@@ -17,6 +17,15 @@ export function FilePreview({ evidence }: FilePreviewProps) {
     );
   }
 
+  if (evidence.content) {
+    return (
+      <div
+        className="prose prose-sm dark:prose-invert max-w-none"
+        dangerouslySetInnerHTML={{ __html: evidence.content }}
+      />
+    );
+  }
+
   if (!evidence.file_url) {
     return (
       <p className="text-center text-gray-500 py-8">No hay contenido para previsualizar</p>

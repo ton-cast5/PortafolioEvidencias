@@ -26,6 +26,7 @@ import type { Evidence, EvidenceType, Topic } from "@/lib/types";
 import {
   EVIDENCE_TYPE_LABELS,
   EVIDENCE_TYPE_COLORS,
+  TOPIC_TYPE_LABELS,
   COMMON_TAGS,
 } from "@/lib/types";
 import { formatDate } from "@/lib/utils/helpers";
@@ -110,7 +111,7 @@ export function EvidenceManager({
         title: form.title,
         description: form.description || undefined,
         type: form.type,
-        content: form.type === "apunte" ? form.content : undefined,
+        content: form.content || undefined,
         file_url: fileUrl,
         tags: form.tags,
         due_date: form.due_date || undefined,
@@ -156,6 +157,11 @@ export function EvidenceManager({
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+              {TOPIC_TYPE_LABELS[topic.topic_type ?? "tema"]}
+            </span>
+          </div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">{topic.title}</h2>
           {topic.description && (
             <p className="mt-1 text-sm text-gray-500">{topic.description}</p>
@@ -300,7 +306,7 @@ export function EvidenceManager({
           {form.type === "apunte" && (
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Contenido
+                Contenido del apunte
               </label>
               <RichTextEditor
                 content={form.content}
@@ -309,22 +315,41 @@ export function EvidenceManager({
             </div>
           )}
 
-          {form.type !== "apunte" && (
+          {(form.type === "tarea" || form.type === "proyecto") && (
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Archivo {form.type === "tarea" ? "(PDF, imagen)" : "(código, PDF, etc.)"}
+                Descripción o texto (opcional)
               </label>
-              <input
-                type="file"
-                onChange={(e) => setForm({ ...form, file: e.target.files?.[0] ?? null })}
-                accept={form.type === "tarea" ? ".pdf,.jpg,.jpeg,.png,.gif,.webp" : "*"}
-                className="w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 dark:file:bg-blue-950 dark:file:text-blue-400"
+              <RichTextEditor
+                content={form.content}
+                onChange={(content) => setForm({ ...form, content })}
+                placeholder="Instrucciones, notas o descripción de la entrega..."
               />
-              {editingEvidence?.file_url && !form.file && (
-                <p className="mt-1 text-xs text-gray-400">Archivo actual conservado</p>
-              )}
             </div>
           )}
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {form.type === "apunte"
+                ? "Imagen o documento (opcional)"
+                : form.type === "tarea"
+                  ? "Archivo: PDF, imagen, código o documento"
+                  : "Archivo: código, PDF, imagen, etc."}
+            </label>
+            <input
+              type="file"
+              onChange={(e) => setForm({ ...form, file: e.target.files?.[0] ?? null })}
+              accept={
+                form.type === "apunte"
+                  ? ".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx"
+                  : "*"
+              }
+              className="w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 dark:file:bg-blue-950 dark:file:text-blue-400"
+            />
+            {editingEvidence?.file_url && !form.file && (
+              <p className="mt-1 text-xs text-gray-400">Archivo actual conservado</p>
+            )}
+          </div>
 
           <Input
             label="Fecha de entrega (opcional)"

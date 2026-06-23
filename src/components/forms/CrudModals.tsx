@@ -6,7 +6,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { createUnit, updateUnit, createTopic, updateTopic, createSubject, updateSubject } from "@/lib/services/portfolio";
-import type { Unit, Topic, Subject } from "@/lib/types";
+import type { Unit, Topic, Subject, TopicType } from "@/lib/types";
+import { TOPIC_TYPE_LABELS } from "@/lib/types";
 
 interface UnitFormModalProps {
   isOpen: boolean;
@@ -102,6 +103,7 @@ export function TopicFormModal({
 }: TopicFormModalProps) {
   const [title, setTitle] = useState(editingTopic?.title ?? "");
   const [description, setDescription] = useState(editingTopic?.description ?? "");
+  const [topicType, setTopicType] = useState<TopicType>(editingTopic?.topic_type ?? "tema");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -109,9 +111,9 @@ export function TopicFormModal({
     setLoading(true);
     try {
       if (editingTopic) {
-        await updateTopic(editingTopic.id, { title, description });
+        await updateTopic(editingTopic.id, { title, description, topic_type: topicType });
       } else {
-        await createTopic(unitId, title, description);
+        await createTopic(unitId, title, description, topicType);
       }
       onSuccess();
       onClose();
@@ -126,14 +128,35 @@ export function TopicFormModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={editingTopic ? "Editar tema" : "Nuevo tema"}
+      title={editingTopic ? `Editar ${TOPIC_TYPE_LABELS[topicType].toLowerCase()}` : "Nuevo tema o clase"}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Tipo
+          </label>
+          <div className="flex gap-2">
+            {(["tema", "clase"] as TopicType[]).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setTopicType(type)}
+                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                  topicType === type
+                    ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
+                    : "border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400"
+                }`}
+              >
+                {TOPIC_TYPE_LABELS[type]}
+              </button>
+            ))}
+          </div>
+        </div>
         <Input
           label="Título"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="7.1 Nuevo tema"
+          placeholder={topicType === "clase" ? "Clase 1: Introducción" : "1.1 Nuevo tema"}
           required
         />
         <Textarea

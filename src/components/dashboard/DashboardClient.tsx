@@ -9,6 +9,7 @@ import {
   LogOut,
   Download,
   Loader2,
+  Settings,
 } from "lucide-react";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { SearchBar } from "@/components/dashboard/SearchBar";
@@ -16,6 +17,7 @@ import { DashboardOverview } from "@/components/dashboard/DashboardOverview";
 import { WelcomeScreen } from "@/components/dashboard/WelcomeScreen";
 import { EvidenceManager } from "@/components/evidence/EvidenceManager";
 import { UnitFormModal, TopicFormModal, SubjectFormModal } from "@/components/forms/CrudModals";
+import { PortfolioSettingsModal } from "@/components/forms/PortfolioSettingsModal";
 import { Button } from "@/components/ui/Button";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import {
@@ -51,6 +53,8 @@ export function DashboardClient() {
     unitId: "",
   });
   const [subjectModal, setSubjectModal] = useState<{ open: boolean; editing?: Subject | null }>({ open: false });
+  const [portfolioModal, setPortfolioModal] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const loadSubject = useCallback(async (subjectId: string) => {
     const subjectData = await getSubjectWithUnits(subjectId);
@@ -136,8 +140,17 @@ export function DashboardClient() {
     router.refresh();
   };
 
-  const handleExportPDF = () => {
-    if (subject) exportPortfolioToPDF(subject);
+  const handleExportPDF = async () => {
+    if (!subject) return;
+    setExportingPdf(true);
+    try {
+      await exportPortfolioToPDF(subject);
+    } catch (err) {
+      console.error(err);
+      alert("Error al generar el PDF. Intenta de nuevo.");
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   const handleSearchResult = (result: SearchResult) => {
@@ -258,9 +271,17 @@ export function DashboardClient() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={handleExportPDF}>
-              <Download className="h-4 w-4" />
-              Exportar PDF
+            <Button variant="secondary" size="sm" onClick={() => setPortfolioModal(true)}>
+              <Settings className="h-4 w-4" />
+              Datos del portafolio
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleExportPDF} disabled={exportingPdf}>
+              {exportingPdf ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {exportingPdf ? "Generando..." : "Exportar PDF"}
             </Button>
             {subjects.length >= 1 && (
               <Button
@@ -358,6 +379,13 @@ export function DashboardClient() {
         onClose={() => setSubjectModal({ open: false })}
         editingSubject={subjectModal.editing}
         onSuccess={handleSubjectCreated}
+      />
+
+      <PortfolioSettingsModal
+        isOpen={portfolioModal}
+        onClose={() => setPortfolioModal(false)}
+        subject={subject}
+        onSuccess={() => loadData(subject.id)}
       />
     </div>
   );

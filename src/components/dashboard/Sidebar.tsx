@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils/helpers";
 import { SubjectSelector } from "@/components/dashboard/SubjectSelector";
-import type { Subject, SubjectWithUnits, Unit, Topic } from "@/lib/types";
+import type { Subject, SubjectWithUnits, Unit, Topic, TopicType } from "@/lib/types";
+import { TOPIC_TYPE_LABELS } from "@/lib/types";
 
 interface SidebarProps {
   subjects: Subject[];
@@ -171,8 +172,11 @@ export function Sidebar({
                           )}
                           onClick={() => onSelectTopic(topic.id, unit.id)}
                         >
-                          <FileText className="h-3.5 w-3.5 shrink-0" />
-                          <span className="flex-1 truncate">{topic.title}</span>
+                        <FileText className="h-3.5 w-3.5 shrink-0" />
+                        <span className="shrink-0 rounded bg-gray-100 px-1 text-[10px] font-medium text-gray-500 dark:bg-gray-800">
+                          {TOPIC_TYPE_LABELS[(topic.topic_type ?? "tema") as TopicType]}
+                        </span>
+                        <span className="flex-1 truncate">{topic.title}</span>
                           {topic.evidences.length > 0 && (
                             <span className="text-xs text-gray-400">
                               {topic.evidences.length}
