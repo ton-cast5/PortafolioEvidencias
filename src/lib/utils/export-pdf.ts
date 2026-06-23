@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import type { SubjectWithUnits, Evidence } from "@/lib/types";
 import {
   EVIDENCE_TYPE_LABELS,
@@ -307,52 +307,65 @@ function addCoverPage(ctx: PdfContext, subject: SubjectWithUnits) {
   ctx.y = y;
 }
 
-async function mergePdfAttachments(mainBytes: ArrayBuffer, urls: string[]): Promise<Uint8Array> {
-  const mainDoc = await PDFDocument.load(mainBytes);
-
-  for (const url of urls) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const attachBytes = await res.arrayBuffer();
-      const attachDoc = await PDFDocument.load(attachBytes);
-      const pages = await mainDoc.copyPages(attachDoc, attachDoc.getPageIndices());
-      pages.forEach((p) => mainDoc.addPage(p));
-    } catch {
-      // skip failed attachments
-    }
+async function appendPdfFromUrl(doc: PDFDocument, url: string) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const bytes = await res.arrayBuffer();
+    const attachDoc = await PDFDocument.load(bytes);
+    const pages = await doc.copyPages(attachDoc, attachDoc.getPageIndices());
+    pages.forEach((p) => doc.addPage(p));
+  } catch {
+    // skip
   }
-
-  return mainDoc.save();
 }
 
-export async function exportPortfolioToPDF(subject: SubjectWithUnits): Promise<void> {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const pageWidth = doc.internal.pageSize.getWidth();
+async function mergePortfolioPdf(
+  frontBytes: ArrayBuffer,
+  bodyBytes: ArrayBuffer,
+  programaUrl: string | null,
+  evidenceUrls: string[]
+): Promise<Uint8Array> {
+  const doc = await PDFDocument.load(frontBytes);
 
-  const ctx: PdfContext = {
-    doc,
-    y: MARGIN,
-    pageWidth,
-    contentWidth: pageWidth - MARGIN * 2,
-    pdfAttachments: [],
-  };
-
-  addCoverPage(ctx, subject);
-  newPage(ctx);
-
-  if (subject.encuadre) {
-    addHeading(ctx, "ENCUADRE", 1);
-    await addHtmlBlock(ctx, subject.encuadre);
-    newPage(ctx);
+  if (programaUrl) {
+    await appendPdfFromUrl(doc, programaUrl);
   }
 
-  if (subject.programa) {
-    addHeading(ctx, "PROGRAMA DE LA MATERIA", 1);
-    await addHtmlBlock(ctx, subject.programa);
-    newPage(ctx);
+  const bodyDoc = await PDFDocument.load(bodyBytes);
+  const bodyPages = await doc.copyPages(bodyDoc, bodyDoc.getPageIndices());
+  bodyPages.forEach((p) => doc.addPage(p));
+
+  for (const url of evidenceUrls) {
+    await appendPdfFromUrl(doc, url);
   }
 
+  return doc.save();
+}
+
+async function addPageNumbersToPdf(pdfBytes: Uint8Array): Promise<Uint8Array> {
+  const doc = await PDFDocument.load(pdfBytes);
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const pages = doc.getPages();
+  const total = pages.length;
+
+  pages.forEach((page, index) => {
+    const { width } = page.getSize();
+    const text = `Página ${index + 1} de ${total}`;
+    const textWidth = font.widthOfTextAtSize(text, 10);
+    page.drawText(text, {
+      x: (width - textWidth) / 2,
+      y: 28,
+      size: 10,
+      font,
+      color: rgb(0.47, 0.47, 0.47),
+    });
+  });
+
+  return doc.save();
+}
+
+async function buildUnitsSection(ctx: PdfContext, subject: SubjectWithUnits) {
   addHeading(ctx, "CONTENIDO POR UNIDADES", 1);
 
   for (const unit of subject.units) {
@@ -378,32 +391,56 @@ export async function exportPortfolioToPDF(subject: SubjectWithUnits): Promise<v
       }
     }
   }
+}
 
-  const totalPages = doc.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setFontSize(10);
-    doc.setTextColor(120, 120, 120);
-    doc.text(
-      `Página ${i} de ${totalPages}`,
-      pageWidth / 2,
-      doc.internal.pageSize.getHeight() - 10,
-      { align: "center" }
-    );
+export async function exportPortfolioToPDF(subject: SubjectWithUnits): Promise<void> {
+  const pageWidth = new jsPDF().internal.pageSize.getWidth();
+
+  const frontCtx: PdfContext = {
+    doc: new jsPDF({ unit: "mm", format: "a4" }),
+    y: MARGIN,
+    pageWidth,
+    contentWidth: pageWidth - MARGIN * 2,
+    pdfAttachments: [],
+  };
+
+  addCoverPage(frontCtx, subject);
+  newPage(frontCtx);
+
+  if (subject.encuadre) {
+    addHeading(frontCtx, "ENCUADRE", 1);
+    await addHtmlBlock(frontCtx, subject.encuadre);
   }
+
+  if (subject.programa_file_url) {
+    newPage(frontCtx);
+    addHeading(frontCtx, "PROGRAMA DE LA MATERIA", 1);
+  }
+
+  const bodyCtx: PdfContext = {
+    doc: new jsPDF({ unit: "mm", format: "a4" }),
+    y: MARGIN,
+    pageWidth,
+    contentWidth: pageWidth - MARGIN * 2,
+    pdfAttachments: [],
+  };
+
+  await buildUnitsSection(bodyCtx, subject);
 
   const fileName = `${(subject.course_name ?? subject.name).replace(/\s+/g, "_")}_portafolio.pdf`;
 
-  if (ctx.pdfAttachments.length > 0) {
-    const mainBytes = doc.output("arraybuffer");
-    const merged = await mergePdfAttachments(mainBytes, ctx.pdfAttachments);
-    const blob = new Blob([new Uint8Array(merged)], { type: "application/pdf" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  } else {
-    doc.save(fileName);
-  }
+  const merged = await mergePortfolioPdf(
+    frontCtx.doc.output("arraybuffer"),
+    bodyCtx.doc.output("arraybuffer"),
+    subject.programa_file_url,
+    bodyCtx.pdfAttachments
+  );
+
+  const numbered = await addPageNumbersToPdf(merged);
+  const blob = new Blob([new Uint8Array(numbered)], { type: "application/pdf" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }

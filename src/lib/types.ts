@@ -21,7 +21,7 @@ export interface Subject {
   teacher_name: string | null;
   student_name: string | null;
   encuadre: string | null;
-  programa: string | null;
+  programa_file_url: string | null;
 }
 
 export interface SubjectPortfolioData {
@@ -35,7 +35,7 @@ export interface SubjectPortfolioData {
   teacher_name?: string;
   student_name?: string;
   encuadre?: string;
-  programa?: string;
+  programa_file_url?: string | null;
 }
 
 export interface Unit {

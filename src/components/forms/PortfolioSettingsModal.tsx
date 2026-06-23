@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { FileText, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { RichTextEditor } from "@/components/editors/RichTextEditor";
-import { updateSubjectPortfolio } from "@/lib/services/portfolio";
+import { updateSubjectPortfolio, uploadFile } from "@/lib/services/portfolio";
 import type { Subject } from "@/lib/types";
 import { DEFAULT_UNIVERSITY, DEFAULT_DIVISION } from "@/lib/types";
 
@@ -24,6 +25,9 @@ export function PortfolioSettingsModal({
   onSuccess,
 }: PortfolioSettingsModalProps) {
   const [loading, setLoading] = useState(false);
+  const [programaFile, setProgramaFile] = useState<File | null>(null);
+  const [programaUrl, setProgramaUrl] = useState(subject.programa_file_url ?? "");
+
   const [form, setForm] = useState({
     university: subject.university ?? DEFAULT_UNIVERSITY,
     division: subject.division ?? DEFAULT_DIVISION,
@@ -35,7 +39,6 @@ export function PortfolioSettingsModal({
     teacher_name: subject.teacher_name ?? "",
     student_name: subject.student_name ?? "",
     encuadre: subject.encuadre ?? "",
-    programa: subject.programa ?? "",
     name: subject.name,
     description: subject.description ?? "",
   });
@@ -44,7 +47,19 @@ export function PortfolioSettingsModal({
     e.preventDefault();
     setLoading(true);
     try {
-      await updateSubjectPortfolio(subject.id, form);
+      let fileUrl = programaUrl || undefined;
+
+      if (programaFile) {
+        const storagePath = `${form.course_name || form.name}/programa`;
+        fileUrl = await uploadFile(programaFile, storagePath);
+        setProgramaUrl(fileUrl);
+        setProgramaFile(null);
+      }
+
+      await updateSubjectPortfolio(subject.id, {
+        ...form,
+        programa_file_url: fileUrl ?? null,
+      });
       onSuccess();
       onClose();
     } catch {
@@ -96,9 +111,38 @@ export function PortfolioSettingsModal({
 
         <section>
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
-            Programa de la materia
+            Programa de la materia (PDF)
           </h3>
-          <RichTextEditor content={form.programa} onChange={(v) => set("programa", v)} placeholder="Descripción general del programa, enfoque y contenidos..." />
+          <p className="mb-3 text-sm text-gray-500">
+            Sube el programa oficial de la materia en formato PDF. Se incluirá en la exportación del portafolio.
+          </p>
+
+          {programaUrl && !programaFile && (
+            <div className="mb-3 flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
+              <FileText className="h-5 w-5 shrink-0 text-red-500" />
+              <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">Programa actual cargado</span>
+              <a
+                href={programaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
+              >
+                Ver PDF <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </div>
+          )}
+
+          <input
+            type="file"
+            accept=".pdf,application/pdf"
+            onChange={(e) => setProgramaFile(e.target.files?.[0] ?? null)}
+            className="w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-700 dark:file:bg-blue-950 dark:file:text-blue-400"
+          />
+          {programaFile && (
+            <p className="mt-2 text-xs text-gray-500">
+              Archivo seleccionado: {programaFile.name}
+            </p>
+          )}
         </section>
 
         <div className="flex justify-end gap-3 border-t border-gray-200 pt-4 dark:border-gray-800">
