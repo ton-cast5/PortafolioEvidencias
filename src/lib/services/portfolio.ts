@@ -12,6 +12,7 @@ import type {
   SubjectPortfolioData,
 } from "@/lib/types";
 import { DEFAULT_UNIVERSITY, DEFAULT_DIVISION } from "@/lib/types";
+import { sanitizeFileName, formatSupabaseError } from "@/lib/utils/helpers";
 
 const supabase = () => createClient();
 
@@ -239,19 +240,25 @@ export async function createEvidence(
   }
 ): Promise<Evidence> {
   const user = await getCurrentUser();
-  if (!user) throw new Error("No autenticado");
+  if (!user) throw new Error("No autenticado. Vuelve a iniciar sesion.");
 
   const { data: evidence, error } = await supabase()
     .from("evidences")
     .insert({
-      ...data,
+      title: data.title.trim(),
+      description: data.description?.trim() || null,
+      type: data.type,
+      content: data.content || null,
+      file_url: data.file_url || null,
+      tags: data.tags ?? [],
+      due_date: data.due_date || null,
       topic_id: topicId,
       user_id: user.id,
     })
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(formatSupabaseError(error));
   return evidence;
 }
 
@@ -261,14 +268,23 @@ export async function updateEvidence(
     Pick<Evidence, "title" | "description" | "type" | "content" | "file_url" | "tags" | "due_date">
   >
 ): Promise<Evidence> {
+  const payload: Record<string, unknown> = { ...updates };
+  if (typeof updates.title === "string") payload.title = updates.title.trim();
+  if ("description" in updates) {
+    payload.description = updates.description?.trim() || null;
+  }
+  if ("content" in updates) payload.content = updates.content || null;
+  if ("file_url" in updates) payload.file_url = updates.file_url || null;
+  if ("due_date" in updates) payload.due_date = updates.due_date || null;
+
   const { data, error } = await supabase()
     .from("evidences")
-    .update(updates)
+    .update(payload)
     .eq("id", id)
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(formatSupabaseError(error));
   return data;
 }
 
@@ -282,20 +298,27 @@ export async function uploadFile(
   path: string
 ): Promise<string> {
   const user = await getCurrentUser();
-  if (!user) throw new Error("No autenticado");
+  if (!user) throw new Error("No autenticado. Vuelve a iniciar sesion.");
 
-  const filePath = `${user.id}/${path}/${Date.now()}_${file.name}`;
+  const safeName = sanitizeFileName(file.name);
+  const filePath = `${user.id}/${path}/${Date.now()}_${safeName}`;
 
   const { error } = await supabase().storage
     .from("evidencias")
-    .upload(filePath, file, { upsert: false });
+    .upload(filePath, file, {
+      upsert: true,
+      cacheControl: "3600",
+    });
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(
+      error.message?.includes("Bucket not found")
+        ? "El almacenamiento no esta configurado. Contacta al administrador."
+        : formatSupabaseError(error)
+    );
+  }
 
-  const { data } = supabase().storage
-    .from("evidencias")
-    .getPublicUrl(filePath);
-
+  const { data } = supabase().storage.from("evidencias").getPublicUrl(filePath);
   return data.publicUrl;
 }
 

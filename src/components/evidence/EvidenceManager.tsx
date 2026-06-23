@@ -29,7 +29,7 @@ import {
   TOPIC_TYPE_LABELS,
   COMMON_TAGS,
 } from "@/lib/types";
-import { formatDate } from "@/lib/utils/helpers";
+import { formatDate, buildStoragePath, isEmptyHtml, formatSupabaseError } from "@/lib/utils/helpers";
 import { FilePreview } from "@/components/evidence/FilePreview";
 
 interface EvidenceManagerProps {
@@ -100,27 +100,43 @@ export function EvidenceManager({
     setLoading(true);
 
     try {
-      let fileUrl = editingEvidence?.file_url ?? undefined;
-
-      if (form.file) {
-        const storagePath = `${subjectName}/${unitTitle}/${topic.title}`;
-        fileUrl = await uploadFile(form.file, storagePath);
-      }
-
-      const payload = {
-        title: form.title,
-        description: form.description || undefined,
+      const basePayload = {
+        title: form.title.trim(),
+        description: form.description.trim() || undefined,
         type: form.type,
-        content: form.content || undefined,
-        file_url: fileUrl,
+        content: isEmptyHtml(form.content) ? undefined : form.content,
         tags: form.tags,
         due_date: form.due_date || undefined,
       };
 
+      let evidenceId = editingEvidence?.id ?? null;
+
       if (editingEvidence) {
-        await updateEvidence(editingEvidence.id, payload);
+        await updateEvidence(editingEvidence.id, {
+          ...basePayload,
+          file_url: editingEvidence.file_url ?? undefined,
+        });
+        evidenceId = editingEvidence.id;
       } else {
-        await createEvidence(topic.id, payload);
+        const created = await createEvidence(topic.id, basePayload);
+        evidenceId = created.id;
+      }
+
+      if (form.file && evidenceId) {
+        try {
+          const storagePath = buildStoragePath(subjectName, unitTitle, topic.title);
+          const fileUrl = await uploadFile(form.file, storagePath);
+          await updateEvidence(evidenceId, { file_url: fileUrl });
+        } catch (uploadErr) {
+          console.error(uploadErr);
+          alert(
+            `Evidencia guardada, pero no se pudo subir el archivo: ${formatSupabaseError(uploadErr)}`
+          );
+          setShowModal(false);
+          resetForm();
+          onRefresh();
+          return;
+        }
       }
 
       setShowModal(false);
@@ -128,7 +144,7 @@ export function EvidenceManager({
       onRefresh();
     } catch (err) {
       console.error(err);
-      alert("Error al guardar la evidencia");
+      alert(`Error al guardar la evidencia: ${formatSupabaseError(err)}`);
     } finally {
       setLoading(false);
     }
@@ -309,6 +325,7 @@ export function EvidenceManager({
                 Contenido del apunte
               </label>
               <RichTextEditor
+                key={`apunte-${editingEvidence?.id ?? "new"}`}
                 content={form.content}
                 onChange={(content) => setForm({ ...form, content })}
               />
@@ -321,6 +338,7 @@ export function EvidenceManager({
                 Descripción o texto (opcional)
               </label>
               <RichTextEditor
+                key={`${form.type}-${editingEvidence?.id ?? "new"}`}
                 content={form.content}
                 onChange={(content) => setForm({ ...form, content })}
                 placeholder="Instrucciones, notas o descripción de la entrega..."

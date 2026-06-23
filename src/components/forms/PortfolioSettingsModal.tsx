@@ -10,6 +10,7 @@ import { RichTextEditor } from "@/components/editors/RichTextEditor";
 import { updateSubjectPortfolio, uploadFile } from "@/lib/services/portfolio";
 import type { Subject } from "@/lib/types";
 import { DEFAULT_UNIVERSITY, DEFAULT_DIVISION } from "@/lib/types";
+import { buildStoragePath, formatSupabaseError } from "@/lib/utils/helpers";
 
 interface PortfolioSettingsModalProps {
   isOpen: boolean;
@@ -50,7 +51,7 @@ export function PortfolioSettingsModal({
       let fileUrl = programaUrl || undefined;
 
       if (programaFile) {
-        const storagePath = `${form.course_name || form.name}/programa`;
+        const storagePath = buildStoragePath(form.course_name || form.name, "programa");
         fileUrl = await uploadFile(programaFile, storagePath);
         setProgramaUrl(fileUrl);
         setProgramaFile(null);
@@ -62,8 +63,8 @@ export function PortfolioSettingsModal({
       });
       onSuccess();
       onClose();
-    } catch {
-      alert("Error al guardar los datos del portafolio");
+    } catch (err) {
+      alert(`Error al guardar los datos del portafolio: ${formatSupabaseError(err)}`);
     } finally {
       setLoading(false);
     }

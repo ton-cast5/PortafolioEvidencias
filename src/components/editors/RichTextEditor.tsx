@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -30,14 +31,15 @@ export function RichTextEditor({
   className,
 }: RichTextEditorProps) {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit,
       Underline,
       Placeholder.configure({ placeholder }),
     ],
     content,
-    onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+    onUpdate: ({ editor: ed }) => {
+      onChange(ed.getHTML());
     },
     editorProps: {
       attributes: {
@@ -46,6 +48,14 @@ export function RichTextEditor({
       },
     },
   });
+
+  useEffect(() => {
+    if (!editor) return;
+    const current = editor.getHTML();
+    if (content !== current) {
+      editor.commands.setContent(content || "", false);
+    }
+  }, [content, editor]);
 
   if (!editor) return null;
 
